@@ -1,1 +1,1367 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Besat - Mantık Devreleri </title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --grid-color: #333;
+            --node-bg: #2d2d30;
+            --wire-off: #555;
+            --wire-on: #4caf50;
+            --border-select: #007acc;
+        }
 
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none; /* Metin seçimini engelle */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh; /* Masaüstü için */
+            height: 100dvh; /* Mobil tarayıcılar için */
+            background-color: var(--bg-color);
+            color: #d4d4d4;
+            overflow: hidden;
+            touch-action: none; 
+        }
+
+        /* --- MASAÜSTÜ DÜZENİ (Varsayılan) --- */
+        #sidebar {
+            width: 220px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid #3e3e42;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        #workspace {
+            flex-grow: 1;
+            position: relative;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 25px 25px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        /* Başlıklar */
+        h3 { margin: 0 0 10px 0; color: #fff; font-size: 1rem; text-transform: uppercase; }
+        .info-text { font-size: 0.8rem; color: #888; margin-bottom: 20px; }
+
+        /* Araç Kutuları */
+        .component-tool {
+            background-color: #3e3e42;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .component-tool:hover { background-color: #505050; border-color: var(--border-select); }
+        .component-tool:active { cursor: grabbing; }
+
+        /* Sürüklenen Hayalet Obje */
+        .drag-ghost {
+            position: absolute;
+            background: rgba(0, 122, 204, 0.9);
+            border: 2px solid white;
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            pointer-events: none;
+            z-index: 9999;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            font-weight: bold;
+            display: flex; align-items: center; gap: 10px;
+            white-space: nowrap;
+        }
+
+        /* --- SVG KATMANI --- */
+        #connections-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; 
+            z-index: 1;
+        }
+        path {
+            fill: none;
+            stroke-width: 4;
+            stroke-linecap: round;
+            pointer-events: visibleStroke;
+            cursor: pointer;
+            transition: stroke 0.2s;
+        }
+        path:hover { stroke-width: 6; opacity: 0.8; }
+
+        /* --- KUTULAR (NODES) --- */
+        .node {
+            position: absolute;
+            width: 100px;
+            background-color: var(--node-bg);
+            border: 2px solid #555;
+            border-radius: 6px;
+            padding: 8px 0;
+            text-align: center;
+            z-index: 2;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            cursor: move;
+        }
+        .node.selected { border-color: var(--border-select); box-shadow: 0 0 15px rgba(0, 122, 204, 0.5); }
+        .node-header { font-weight: bold; font-size: 13px; color: #fff; margin-bottom: 5px; pointer-events: none; }
+
+        /* --- ELEMANLAR --- */
+        .toggle-switch {
+            width: 40px; height: 20px;
+            background: #444; border-radius: 20px;
+            margin: 5px auto; position: relative; cursor: pointer;
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 16px; height: 16px; background: #fff; border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .node.on .toggle-switch { background: var(--wire-on); }
+        .node.on .toggle-switch::after { transform: translateX(20px); }
+
+        .led {
+            width: 20px; height: 20px;
+            background: #222; border-radius: 50%;
+            margin: 5px auto; border: 2px solid #555;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .node.on .led { background: #0f0; box-shadow: 0 0 15px #0f0; border-color: #fff; }
+
+        /* --- PINLER --- */
+        .pin {
+            width: 14px; height: 14px;
+            background-color: #aaa; border-radius: 50%;
+            position: absolute; top: 50%; transform: translateY(-50%);
+            border: 2px solid var(--node-bg); cursor: crosshair; z-index: 5;
+        }
+        /* Geniş dokunma alanı */
+        .pin::before {
+            content: ''; position: absolute;
+            top: -10px; left: -10px; right: -10px; bottom: -10px;
+        }
+        .pin:hover { transform: translateY(-50%) scale(1.2); background-color: #fff; }
+        .input-pin { left: -8px; }
+        .output-pin { right: -8px; }
+
+        /* --- TOOLBAR --- */
+        #toolbar {
+            position: absolute; top: 15px; right: 15px;
+            display: flex; gap: 10px; z-index: 100;
+        }
+        .btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: #3e3e42; color: white; border: none;
+            font-size: 16px; cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn:hover { background: #505050; }
+        .btn-danger { background: #c42b1c; }
+        .btn-danger:hover { background: #a01b0c; }
+
+        /* --- MOBİL İÇİN ÖZEL (Medya Sorgusu) --- */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            
+            #workspace { order: 1; height: calc(100dvh - 100px); }
+            
+            #sidebar {
+                order: 2;
+                width: 100%;
+                height: 100px;
+                min-height: 100px;
+                flex-direction: row; /* Yan yana */
+                border-right: none;
+                border-top: 2px solid #3e3e42;
+                overflow-x: auto;
+                white-space: nowrap;
+                padding: 10px;
+                gap: 15px;
+            }
+
+            h3, .info-text { display: none; }
+
+            .component-tool {
+                flex-direction: column;
+                min-width: 70px; height: 70px;
+                justify-content: center; text-align: center;
+                font-size: 11px; padding: 5px;
+            }
+            .component-tool i, .component-tool strong { font-size: 24px; margin-bottom: 5px; }
+            
+            /* Mobilde sağ tık menüsünü engelle */
+            body { -webkit-user-select: none; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h3>Bileşenler</h3>
+        <p class="info-text">Sürükle & Bırak</p>
+
+        <div class="component-tool" data-type="INPUT">
+            <i class="fas fa-toggle-off"></i> <span>GİRİŞ</span>
+        </div>
+        <div class="component-tool" data-type="AND">
+            <strong>&</strong> <span>AND</span>
+        </div>
+        <div class="component-tool" data-type="OR">
+            <strong>≥1</strong> <span>OR</span>
+        </div>
+        <div class="component-tool" data-type="NOT">
+            <strong>!</strong> <span>NOT</span>
+        </div>
+        <div class="component-tool" data-type="XOR">
+            <strong>=1</strong> <span>XOR</span>
+        </div>
+        <div class="component-tool" data-type="OUTPUT">
+            <i class="far fa-lightbulb"></i> <span>ÇIKIŞ</span>
+        </div>
+        <div style="min-width: 10px;"></div> </div>
+
+    <div id="workspace">
+        <div id="toolbar">
+            <button class="btn" onclick="undo()" title="Geri Al"><i class="fas fa-undo"></i></button>
+            <button class="btn btn-danger" onclick="clearBoard()" title="Temizle"><i class="fas fa-trash"></i></button>
+        </div>
+        <svg id="connections-layer"></svg>
+    </div>
+
+    <script>
+        // --- YARDIMCI FONKSİYON: EVENT KONUMUNU BUL ---
+        // Bu fonksiyon hem mouse hem touch olayını anlar
+        function getXY(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.changedTouches && e.changedTouches.length > 0) { // Touchend için
+                 return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        const workspace = document.getElementById('workspace');
+        const svgLayer = document.getElementById('connections-layer');
+        let nodes = [];
+        let connections = [];
+        let historyStack = [];
+        let tempLine = null;
+        let startPinData = null;
+
+        // --- SÜRÜKLE BIRAK (MENÜDEN SAHNEYE) ---
+        let ghostEl = null;
+        let activeToolType = null;
+
+        document.querySelectorAll('.component-tool').forEach(tool => {
+            // Hem mouse hem touch dinleyicisi ekle
+            tool.addEventListener('mousedown', startToolDrag);
+            tool.addEventListener('touchstart', startToolDrag, {passive: false});
+        });
+
+        function startToolDrag(e) {
+            // Sadece sol tık veya dokunma
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            
+            // Eğer mobildeyse sayfa kaymasını engelle (yatay scroll hariç)
+            // Ama menü scroll olmalı, o yüzden e.preventDefault() burada yapmıyoruz.
+            // Sadece dikey harekette yapacağız.
+            
+            const pos = getXY(e);
+            activeToolType = e.currentTarget.getAttribute('data-type');
+
+            // Hayalet elementi oluştur
+            ghostEl = document.createElement('div');
+            ghostEl.className = 'drag-ghost';
+            ghostEl.innerHTML = e.currentTarget.innerHTML;
+            document.body.appendChild(ghostEl);
+            updateGhost(pos.x, pos.y);
+
+            if (e.type === 'mousedown') {
+                window.addEventListener('mousemove', onToolMove);
+                window.addEventListener('mouseup', onToolEnd);
+            } else {
+                window.addEventListener('touchmove', onToolMove, {passive: false});
+                window.addEventListener('touchend', onToolEnd);
+            }
+        }
+
+        function onToolMove(e) {
+            e.preventDefault(); // Sayfa kaymasını engelle
+            const pos = getXY(e);
+            updateGhost(pos.x, pos.y);
+        }
+
+        function updateGhost(x, y) {
+            if(!ghostEl) return;
+            // Mobilde parmağın üstünde görünsün, PC'de biraz yanında
+            const isMobile = window.innerWidth <= 768;
+            const offsetX = isMobile ? -35 : 10;
+            const offsetY = isMobile ? -80 : 10;
+            ghostEl.style.left = (x + offsetX) + 'px';
+            ghostEl.style.top = (y + offsetY) + 'px';
+        }
+
+        function onToolEnd(e) {
+            const pos = getXY(e);
+            const rect = workspace.getBoundingClientRect();
+
+            // Bırakılan yer sahne içinde mi?
+            if (pos.x >= rect.left && pos.x <= rect.right && 
+                pos.y >= rect.top && pos.y <= rect.bottom) {
+                addNode(activeToolType, pos.x - rect.left, pos.y - rect.top);
+            }
+
+            // Temizlik
+            if(ghostEl) ghostEl.remove();
+            ghostEl = null;
+            window.removeEventListener('mousemove', onToolMove);
+            window.removeEventListener('mouseup', onToolEnd);
+            window.removeEventListener('touchmove', onToolMove);
+            window.removeEventListener('touchend', onToolEnd);
+        }
+
+        // --- SAHNE YÖNETİMİ ---
+
+        function generateId() { return 'n' + Date.now() + Math.floor(Math.random()*1000); }
+
+        function addNode(type, x, y) {
+            saveState();
+            const id = generateId();
+            let label = type;
+            if(type === 'INPUT') label = String.fromCharCode(65 + nodes.filter(n=>n.type==='INPUT').length);
+
+            // Sınır kontrolü
+            if(x < 50) x = 50; if(x > workspace.clientWidth - 50) x = workspace.clientWidth - 50;
+            if(y < 30) y = 30; if(y > workspace.clientHeight - 30) y = workspace.clientHeight - 30;
+
+            nodes.push({ id, type, x, y, state: 0, label });
+            render();
+            simulate();
+        }
+
+        function render() {
+            document.querySelectorAll('.node').forEach(n => n.remove());
+            svgLayer.innerHTML = '';
+
+            nodes.forEach(node => {
+                const el = document.createElement('div');
+                el.className = `node ${node.state ? 'on' : ''}`;
+                el.id = node.id;
+                el.style.left = (node.x - 50) + 'px';
+                el.style.top = (node.y - 25) + 'px';
+
+                let content = `<div class="node-header">${node.label}</div>`;
+                if(node.type === 'INPUT') content += `<div class="toggle-switch"></div>`;
+                else if(node.type === 'OUTPUT') content += `<div class="led"></div>`;
+                el.innerHTML = content;
+
+                // Dinleyiciler
+                addDragLogic(el, node);
+                addPins(el, node);
+
+                // Tıklama (Input Toggle)
+                el.addEventListener('click', (e) => {
+                    // Sadece input ise ve sürüklenmediyse
+                    if(node.type === 'INPUT' && !isDragging) toggleInput(node.id);
+                });
+                // Mobilde bazen click algılamaz, touchend yedeği
+                el.addEventListener('touchend', (e) => {
+                    if(node.type === 'INPUT' && !isDragging) {
+                        e.preventDefault(); // Click'i duplicate etmesin
+                        toggleInput(node.id);
+                    }
+                });
+
+                // Çift Tıklama (Silme) - PC
+                el.addEventListener('dblclick', (e) => {
+                     e.stopPropagation(); deleteNode(node.id);
+                });
+
+                workspace.appendChild(el);
+            });
+
+            connections.forEach(drawConnection);
+        }
+
+        function addPins(el, node) {
+            const inpCount = (node.type==='NOT' || node.type==='OUTPUT') ? 1 : (node.type==='INPUT' ? 0 : 2);
+            for(let i=0; i<inpCount; i++) {
+                const pin = createPin('input', node.id, i);
+                if(inpCount > 1) pin.style.top = (i===0 ? '30%' : '70%');
+                el.appendChild(pin);
+            }
+            if(node.type !== 'OUTPUT') {
+                el.appendChild(createPin('output', node.id, 0));
+            }
+        }
+
+        function createPin(type, id, idx) {
+            const pin = document.createElement('div');
+            pin.className = `pin ${type}-pin`;
+            pin.dataset.id = id; pin.dataset.idx = idx; pin.dataset.type = type;
+            
+            // Hibrit Wire Başlatma
+            const startWire = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if(type !== 'output') return;
+                
+                const pos = getXY(e);
+                const rect = workspace.getBoundingClientRect();
+                
+                startPinData = {
+                    id: id, idx: idx,
+                    x: pos.x - rect.left, 
+                    y: pos.y - rect.top
+                };
+
+                tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                tempLine.setAttribute('stroke', '#fff');
+                tempLine.setAttribute('stroke-width', '2');
+                tempLine.setAttribute('stroke-dasharray', '5,5');
+                svgLayer.appendChild(tempLine);
+
+                if (e.type === 'mousedown') {
+                    window.addEventListener('mousemove', onWireMove);
+                    window.addEventListener('mouseup', onWireEnd);
+                } else {
+                    window.addEventListener('touchmove', onWireMove, {passive: false});
+                    window.addEventListener('touchend', onWireEnd);
+                }
+            };
+
+            pin.addEventListener('mousedown', startWire);
+            pin.addEventListener('touchstart', startWire, {passive:false});
+            return pin;
+        }
+
+        // --- KABLO HAREKETİ ---
+        function onWireMove(e) {
+            e.preventDefault();
+            if(!tempLine) return;
+            const pos = getXY(e);
+            const rect = workspace.getBoundingClientRect();
+            
+            tempLine.setAttribute('x1', startPinData.x);
+            tempLine.setAttribute('y1', startPinData.y);
+            tempLine.setAttribute('x2', pos.x - rect.left);
+            tempLine.setAttribute('y2', pos.y - rect.top);
+        }
+
+        function onWireEnd(e) {
+            const pos = getXY(e);
+            const target = document.elementFromPoint(pos.x, pos.y);
+            
+            // Eğer bırakılan yer bir pin veya pinin geniş alanıysa
+            // (Pin'in içindeki veya kendisi)
+            let pinEl = target;
+            if(target && !target.classList.contains('pin')) {
+                // Pin değilse belki pinin :before alanıdır, parent'a bakamayız ama
+                // class kontrolü yeterli.
+            }
+
+            if (pinEl && pinEl.classList.contains('input-pin')) {
+                const tId = pinEl.dataset.id;
+                const tIdx = parseInt(pinEl.dataset.idx);
+
+                if (tId !== startPinData.id) {
+                    saveState();
+                    // Eskiyi sil
+                    connections = connections.filter(c => !(c.to === tId && c.toIdx === tIdx));
+                    connections.push({
+                        id: generateId(),
+                        from: startPinData.id, fromIdx: startPinData.idx,
+                        to: tId, toIdx: tIdx
+                    });
+                    render(); simulate();
+                }
+            }
+
+            if(tempLine) tempLine.remove();
+            tempLine = null; startPinData = null;
+            window.removeEventListener('mousemove', onWireMove);
+            window.removeEventListener('mouseup', onWireEnd);
+            window.removeEventListener('touchmove', onWireMove);
+            window.removeEventListener('touchend', onWireEnd);
+        }
+
+        // --- NODE SÜRÜKLEME ---
+        let isDragging = false;
+        function addDragLogic(el, node) {
+            const startDrag = (e) => {
+                if(e.target.classList.contains('pin')) return;
+                
+                isDragging = false;
+                const pos = getXY(e);
+                const startX = pos.x;
+                const startY = pos.y;
+                const initX = node.x;
+                const initY = node.y;
+
+                document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+                el.classList.add('selected');
+
+                const move = (ev) => {
+                    ev.preventDefault();
+                    isDragging = true;
+                    const cPos = getXY(ev);
+                    node.x = initX + (cPos.x - startX);
+                    node.y = initY + (cPos.y - startY);
+                    
+                    el.style.left = (node.x - 50) + 'px';
+                    el.style.top = (node.y - 25) + 'px';
+                };
+
+                const end = () => {
+                    if(isDragging) render(); // Kabloları güncelle
+                    if(e.type === 'mousedown') {
+                        window.removeEventListener('mousemove', move);
+                        window.removeEventListener('mouseup', end);
+                    } else {
+                        window.removeEventListener('touchmove', move);
+                        window.removeEventListener('touchend', end);
+                    }
+                };
+
+                if(e.type === 'mousedown') {
+                    window.addEventListener('mousemove', move);
+                    window.addEventListener('mouseup', end);
+                } else {
+                    window.addEventListener('touchmove', move, {passive:false});
+                    window.addEventListener('touchend', end);
+                }
+            };
+
+            el.addEventListener('mousedown', startDrag);
+            el.addEventListener('touchstart', startDrag, {passive:false});
+        }
+
+        // --- MANTIK ve SİMÜLASYON ---
+        function toggleInput(id) {
+            const n = nodes.find(x=>x.id===id);
+            if(n) { n.state = !n.state; render(); simulate(); }
+        }
+
+        function simulate() {
+            let changed = true, loop = 0;
+            while(changed && loop++ < 50) {
+                changed = false;
+                nodes.forEach(n => {
+                    if(n.type === 'INPUT') return;
+                    
+                    const inputs = [0,0];
+                    connections.forEach(c => {
+                        if(c.to === n.id) {
+                            const src = nodes.find(s=>s.id===c.from);
+                            if(src) inputs[c.toIdx] = src.state;
+                        }
+                    });
+
+                    let res = 0;
+                    const [a,b] = inputs;
+                    switch(n.type) {
+                        case 'AND': res = a && b; break;
+                        case 'OR': res = a || b; break;
+                        case 'XOR': res = (a!==b); break;
+                        case 'NOT': res = !a; break;
+                        case 'OUTPUT': res = a; break;
+                    }
+                    if(n.state !== (res?1:0)) { n.state = res?1:0; changed = true; }
+                });
+            }
+            if(loop > 1) render();
+        }
+
+        function drawConnection(c) {
+            const fNode = nodes.find(n=>n.id===c.from);
+            const tNode = nodes.find(n=>n.id===c.to);
+            if(!fNode || !tNode) return;
+
+            const fx = fNode.x + 50; const fy = fNode.y;
+            const tx = tNode.x - 50; let ty = tNode.y;
+
+            // Çoklu giriş konumu
+            const inpCount = (tNode.type==='NOT'||tNode.type==='OUTPUT')?1:2;
+            if(inpCount > 1) ty += (c.toIdx===0 ? -10 : 10);
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const dist = Math.abs(tx-fx)*0.5;
+            path.setAttribute('d', `M ${fx} ${fy} C ${fx+dist} ${fy}, ${tx-dist} ${ty}, ${tx} ${ty}`);
+            path.setAttribute('stroke', fNode.state ? 'var(--wire-on)' : 'var(--wire-off)');
+            
+            // Çift tık ile silme
+            path.addEventListener('dblclick', () => {
+                if(confirm('Kablo silinsin mi?')) {
+                    saveState();
+                    connections = connections.filter(x => x.id !== c.id);
+                    render(); simulate();
+                }
+            });
+            
+            svgLayer.appendChild(path);
+        }
+
+        function deleteNode(id) {
+            if(confirm('Bileşen silinsin mi?')) {
+                saveState();
+                nodes = nodes.filter(n=>n.id!==id);
+                connections = connections.filter(c=>c.from!==id && c.to!==id);
+                render(); simulate();
+            }
+        }
+
+        function clearBoard() {
+            if(confirm('Tüm devre temizlensin mi?')) { saveState(); nodes=[]; connections=[]; render(); }
+        }
+
+        function undo() {
+            if(historyStack.length) {
+                const s = JSON.parse(historyStack.pop());
+                nodes = s.n; connections = s.c; render(); simulate();
+            }
+        }
+        function saveState() {
+            if(historyStack.length > 20) historyStack.shift();
+            historyStack.push(JSON.stringify({n:nodes, c:connections}));
+        }
+
+        // Klavye kısayolları (Desktop)
+        document.addEventListener('keydown', e => {
+            if((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+        });
+
+    </script>
+</body>
+</html>
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Mantık Devre Simülatörü</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --grid-color: #333;
+            --node-bg: #2d2d30;
+            --wire-off: #555;
+            --wire-on: #4caf50; /* Aktif olduğunda yeşil */
+            --border-select: #007acc;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: #d4d4d4;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* SOL PANEL */
+        #sidebar {
+            width: 220px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid #3e3e42;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+        }
+
+        h3 { margin-top: 0; color: #fff; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .info-text { font-size: 0.8rem; color: #888; margin-bottom: 20px; }
+
+        .component-tool {
+            background-color: #3e3e42;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .component-tool:hover { background-color: #505050; border-color: #007acc; }
+        .component-tool:active { cursor: grabbing; }
+
+        /* SAHNE */
+        #workspace {
+            flex-grow: 1;
+            position: relative;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow: hidden;
+            cursor: default;
+        }
+
+        /* SVG KATMANI */
+        #connections-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; 
+            z-index: 1;
+        }
+
+        path {
+            fill: none;
+            stroke-width: 3;
+            stroke-linecap: round;
+            cursor: pointer;
+            pointer-events: visibleStroke; /* Sadece çizgiye tıklanabilsin */
+            transition: stroke 0.2s;
+        }
+
+        path:hover { stroke-width: 5; opacity: 0.8; }
+
+        /* KUTULAR (NODES) */
+        .node {
+            position: absolute;
+            width: 100px;
+            background-color: var(--node-bg);
+            border: 2px solid #3e3e42;
+            border-radius: 6px;
+            padding: 8px 0;
+            text-align: center;
+            cursor: move;
+            z-index: 2;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            transition: border-color 0.2s;
+        }
+
+        .node:hover { border-color: #666; }
+        .node.selected { border-color: var(--border-select); }
+
+        .node-header {
+            font-weight: bold;
+            font-size: 13px;
+            pointer-events: none;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        /* Input düğmesi stili */
+        .toggle-switch {
+            width: 40px; height: 20px;
+            background: #555;
+            border-radius: 20px;
+            margin: 5px auto;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute;
+            top: 2px; left: 2px;
+            width: 16px; height: 16px;
+            background: white; border-radius: 50%;
+            transition: transform 0.3s;
+        }
+        .node.on .toggle-switch { background: var(--wire-on); }
+        .node.on .toggle-switch::after { transform: translateX(20px); }
+
+        /* Output Lamba Stili */
+        .led {
+            width: 20px; height: 20px;
+            background: #333;
+            border-radius: 50%;
+            margin: 5px auto;
+            border: 2px solid #555;
+            box-shadow: inset 0 0 5px #000;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .node.on .led {
+            background: #0f0;
+            box-shadow: 0 0 10px #0f0, inset 0 0 5px #fff;
+            border-color: #fff;
+        }
+
+        /* PINLER */
+        .pin {
+            width: 12px; height: 12px;
+            background-color: #aaa;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; transform: translateY(-50%);
+            cursor: crosshair;
+            border: 2px solid var(--node-bg);
+            transition: transform 0.1s, background-color 0.2s;
+            z-index: 3;
+        }
+        .pin:hover { transform: translateY(-50%) scale(1.3); background-color: #fff; }
+        .input-pin { left: -7px; }
+        .output-pin { right: -7px; }
+        
+        .pin.connected { background-color: var(--border-select); }
+
+        /* ÜST MENU (Toolbar) */
+        #toolbar {
+            position: absolute;
+            top: 10px; left: 50%;
+            transform: translateX(-50%);
+            background: var(--panel-bg);
+            padding: 8px 15px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+
+        .btn {
+            background-color: #3e3e42;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: #505050; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger:hover { background-color: #c42b1c; }
+
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h3>Bileşenler</h3>
+        <p class="info-text">Sürükleyip sahneye bırakın.</p>
+        
+        <div class="component-tool" draggable="true" data-type="INPUT">
+            <i class="fas fa-toggle-off"></i> GİRİŞ (Switch)
+        </div>
+        <div class="component-tool" draggable="true" data-type="AND">
+            <strong>&</strong> AND Kapısı
+        </div>
+        <div class="component-tool" draggable="true" data-type="OR">
+            <strong>≥1</strong> OR Kapısı
+        </div>
+        <div class="component-tool" draggable="true" data-type="NOT">
+            <strong>!</strong> NOT (Değil)
+        </div>
+        <div class="component-tool" draggable="true" data-type="XOR">
+            <strong>=1</strong> XOR Kapısı
+        </div>
+        <div class="component-tool" draggable="true" data-type="OUTPUT">
+            <i class="far fa-lightbulb"></i> ÇIKIŞ (Lamba)
+        </div>
+
+        <div style="margin-top: auto; font-size: 12px; color: #555;">
+            Besat tarafından geliştirildi.<br>v2.0 Pro
+        </div>
+    </div>
+
+    <div id="workspace">
+        <div id="toolbar">
+            <button class="btn" onclick="undo()" id="btn-undo" disabled><i class="fas fa-undo"></i> Geri Al</button>
+            <button class="btn" onclick="redo()" id="btn-redo" disabled><i class="fas fa-redo"></i> İleri Al</button>
+            <div style="width: 1px; background: #555; margin: 0 5px;"></div>
+            <button class="btn btn-danger" onclick="clearBoard()"><i class="fas fa-trash"></i> Temizle</button>
+        </div>
+
+        <svg id="connections-layer"></svg>
+    </div>
+
+    <script>
+        // --- DEĞİŞKENLER ---
+        const workspace = document.getElementById('workspace');
+        const svgLayer = document.getElementById('connections-layer');
+        
+        // State (Durum) verisi - Bunu kaydedip geri yükleyeceğiz
+        let nodes = []; // { id, type, x, y, state, label }
+        let connections = []; // { id, fromNode, fromPinIndex, toNode, toPinIndex }
+        
+        // Undo/Redo Yığınları
+        let historyStack = [];
+        let redoStack = [];
+        const MAX_HISTORY = 20;
+
+        let tempLine = null;
+        let startPinData = null; // { nodeId, type, index, element }
+        let inputCounter = 0;
+
+        // --- BAŞLANGIÇ ---
+        
+        // Sürükle Bırak Olayları (Sidebar'dan)
+        document.querySelectorAll('.component-tool').forEach(tool => {
+            tool.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('type', e.target.getAttribute('data-type'));
+            });
+        });
+
+        workspace.addEventListener('dragover', (e) => e.preventDefault());
+        workspace.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('type');
+            if(type) {
+                saveState(); // İşlem öncesi kaydet
+                const rect = workspace.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                addNode(type, x, y);
+            }
+        });
+
+        // --- CORE FONKSİYONLAR ---
+
+        function generateId() { return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9); }
+
+        function addNode(type, x, y) {
+            const id = generateId();
+            let label = type;
+            if (type === 'INPUT') {
+                label = String.fromCharCode(65 + (nodes.filter(n => n.type === 'INPUT').length));
+            }
+
+            const newNode = {
+                id: id,
+                type: type,
+                x: x,
+                y: y,
+                state: 0, // 0 veya 1
+                label: label
+            };
+
+            nodes.push(newNode);
+            render(); // Sahneyi yeniden çiz
+            simulate(); // Devreyi hesapla
+        }
+
+        // --- RENDER ENGINE (DOM Manipülasyonu) ---
+        // React mantığı gibi: Veriye bak, DOM'u sıfırdan veya farka göre çiz.
+        // Basitlik için burada her değişiklikte DOM'u temizleyip yeniden çiziyoruz (küçük projeler için ok).
+
+        function render() {
+            // 1. Mevcut DOM elemanlarını temizle (SVG çizgileri hariç, onları ayrı yöneteceğiz)
+            // Performans için sadece farkları yönetmek daha iyidir ama bu yöntem en az hata çıkarır.
+            document.querySelectorAll('.node').forEach(el => el.remove());
+            svgLayer.innerHTML = ''; 
+
+            // 2. Node'ları Çiz
+            nodes.forEach(node => {
+                const el = document.createElement('div');
+                el.className = `node ${node.state ? 'on' : ''}`;
+                el.id = node.id;
+                el.style.left = (node.x - 50) + 'px';
+                el.style.top = (node.y - 25) + 'px';
+                
+                // İçerik HTML
+                let content = `<div class="node-header">${node.label}</div>`;
+                if(node.type === 'INPUT') {
+                    content += `<div class="toggle-switch" onclick="toggleInput('${node.id}')"></div>`;
+                } else if (node.type === 'OUTPUT') {
+                    content += `<div class="led"></div>`;
+                }
+                el.innerHTML = content;
+
+                // Pinleri Ekle
+                addPinsToElement(el, node);
+
+                // Event Listenerlar
+                addDragLogic(el, node);
+                el.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    deleteNode(node.id);
+                });
+
+                workspace.appendChild(el);
+            });
+
+            // 3. Bağlantıları (Wires) Çiz
+            connections.forEach(conn => {
+                drawConnection(conn);
+            });
+
+            updateUndoButtons();
+        }
+
+        function addPinsToElement(el, nodeData) {
+            // Giriş Pinleri
+            const inputCount = (nodeData.type === 'NOT' || nodeData.type === 'OUTPUT') ? 1 : 
+                               (nodeData.type === 'INPUT') ? 0 : 2;
+
+            for(let i=0; i<inputCount; i++) {
+                const pin = createPinElement('input', nodeData.id, i);
+                // 2 girişliyse dikey dağıt
+                if(inputCount > 1) pin.style.top = (i === 0 ? '30%' : '70%');
+                el.appendChild(pin);
+            }
+
+            // Çıkış Pinleri
+            if(nodeData.type !== 'OUTPUT') {
+                const pin = createPinElement('output', nodeData.id, 0);
+                el.appendChild(pin);
+            }
+        }
+
+        function createPinElement(type, nodeId, index) {
+            const pin = document.createElement('div');
+            pin.className = `pin ${type}-pin`;
+            pin.dataset.nodeId = nodeId;
+            pin.dataset.type = type;
+            pin.dataset.index = index;
+            
+            // Mouse olayları (Kablo çekmek için)
+            pin.onmousedown = (e) => startWiring(e, pin);
+            pin.onmouseup = (e) => finishWiring(e, pin);
+            
+            return pin;
+        }
+
+        // --- KABLO ÇEKME MANTIĞI ---
+
+        function startWiring(e, pinEl) {
+            e.stopPropagation();
+            if(pinEl.dataset.type !== 'output') return; // Sadece çıkıştan başlar
+
+            startPinData = {
+                nodeId: pinEl.dataset.nodeId,
+                index: parseInt(pinEl.dataset.index),
+                x: pinEl.getBoundingClientRect().left + 6,
+                y: pinEl.getBoundingClientRect().top + 6
+            };
+
+            // Geçici çizgi
+            tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            tempLine.setAttribute('stroke', '#fff');
+            tempLine.setAttribute('stroke-width', '2');
+            tempLine.setAttribute('stroke-dasharray', '5,5'); // Kesik çizgi
+            svgLayer.appendChild(tempLine);
+
+            window.addEventListener('mousemove', onWireMove);
+            window.addEventListener('mouseup', onWireCancel);
+        }
+
+        function onWireMove(e) {
+            if(!startPinData) return;
+            const rect = workspace.getBoundingClientRect();
+            
+            const x1 = startPinData.x - rect.left;
+            const y1 = startPinData.y - rect.top;
+            const x2 = e.clientX - rect.left;
+            const y2 = e.clientY - rect.top;
+
+            tempLine.setAttribute('x1', x1);
+            tempLine.setAttribute('y1', y1);
+            tempLine.setAttribute('x2', x2);
+            tempLine.setAttribute('y2', y2);
+        }
+
+        function finishWiring(e, endPinEl) {
+            e.stopPropagation();
+            if(!startPinData) return;
+
+            // Kurallar: Input pinine bitmeli, kendi kendine bağlanmamalı
+            if(endPinEl.dataset.type === 'input' && endPinEl.dataset.nodeId !== startPinData.nodeId) {
+                saveState();
+                
+                // Aynı pine giden eski kablo varsa sil (Bir inputa tek kablo girer)
+                connections = connections.filter(c => 
+                    !(c.toNode === endPinEl.dataset.nodeId && c.toPinIndex == endPinEl.dataset.index)
+                );
+
+                connections.push({
+                    id: generateId(),
+                    fromNode: startPinData.nodeId,
+                    fromPinIndex: startPinData.index,
+                    toNode: endPinEl.dataset.nodeId,
+                    toPinIndex: parseInt(endPinEl.dataset.index)
+                });
+                
+                render();
+                simulate();
+            }
+            cleanupWiring();
+        }
+
+        function onWireCancel() { cleanupWiring(); }
+
+        function cleanupWiring() {
+            if(tempLine) tempLine.remove();
+            tempLine = null;
+            startPinData = null;
+            window.removeEventListener('mousemove', onWireMove);
+            window.removeEventListener('mouseup', onWireCancel);
+        }
+
+        function drawConnection(conn) {
+            // DOM'dan koordinatları bul
+            const fromNodeEl = document.getElementById(conn.fromNode);
+            const toNodeEl = document.getElementById(conn.toNode);
+            if(!fromNodeEl || !toNodeEl) return;
+
+            // Pin konumlarını hesapla (Basit geometri, DOM query yerine)
+            // Output her zaman sağda, Input solda
+            const fromX = parseFloat(fromNodeEl.style.left) + 100; // Genişlik
+            const fromY = parseFloat(fromNodeEl.style.top) + 25; // Yarı yükseklik
+
+            // Input pin konumu (Birden fazla input varsa indexe göre ayarla)
+            const toX = parseFloat(toNodeEl.style.left);
+            const targetNodeData = nodes.find(n => n.id === conn.toNode);
+            let toY = parseFloat(toNodeEl.style.top) + 25;
+            
+            const inputCount = (targetNodeData.type === 'NOT' || targetNodeData.type === 'OUTPUT') ? 1 : 2;
+            if(inputCount > 1) {
+                toY = parseFloat(toNodeEl.style.top) + (conn.toPinIndex === 0 ? 15 : 35); // %30 ve %70 yaklaşık
+            }
+
+            // Path Çizimi (Bezier S-Curve)
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const dx = Math.abs(toX - fromX) * 0.5;
+            const d = `M ${fromX} ${fromY} C ${fromX + dx} ${fromY}, ${toX - dx} ${toY}, ${toX} ${toY}`;
+            
+            path.setAttribute('d', d);
+            
+            // Renk Durumu (Kaynak node'un state'ine bak)
+            const sourceNode = nodes.find(n => n.id === conn.fromNode);
+            const isActive = sourceNode && sourceNode.state === 1;
+            path.setAttribute('stroke', isActive ? 'var(--wire-on)' : 'var(--wire-off)');
+            
+            // Silme özelliği (Double Click)
+            path.addEventListener('dblclick', () => {
+                saveState();
+                connections = connections.filter(c => c.id !== conn.id);
+                render();
+                simulate();
+            });
+
+            svgLayer.appendChild(path);
+        }
+
+        // --- SÜRÜKLEME MANTIĞI (NODES) ---
+
+        function addDragLogic(el, nodeData) {
+            let startX, startY, initialLeft, initialTop;
+
+            el.addEventListener('mousedown', (e) => {
+                if(e.target.classList.contains('pin') || e.target.classList.contains('toggle-switch')) return;
+                
+                saveState(); // Hareket başlıyor
+                startX = e.clientX;
+                startY = e.clientY;
+                initialLeft = nodeData.x;
+                initialTop = nodeData.y;
+                
+                document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+                el.classList.add('selected');
+
+                const onMove = (mv) => {
+                    const dx = mv.clientX - startX;
+                    const dy = mv.clientY - startY;
+                    nodeData.x = initialLeft + dx;
+                    nodeData.y = initialTop + dy;
+                    
+                    // Sadece stil güncelle (tüm render'ı çağırma, performans için)
+                    el.style.left = (nodeData.x - 50) + 'px';
+                    el.style.top = (nodeData.y - 25) + 'px';
+                    
+                    // Kabloları güncellememiz lazım, burada basitlik için render çağırabiliriz
+                    // Ama sürüklerken kasabilir. Pro çözümde sadece ilgili path'leri güncellemek gerekir.
+                    // Şimdilik render çağırıyoruz:
+                    render(); 
+                };
+
+                const onUp = () => {
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                };
+
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+            });
+        }
+
+        // --- SİMÜLASYON MOTORU ---
+
+        function toggleInput(id) {
+            saveState();
+            const node = nodes.find(n => n.id === id);
+            if(node) {
+                node.state = node.state === 1 ? 0 : 1;
+                render();
+                simulate();
+            }
+        }
+
+        function simulate() {
+            let changed = true;
+            let loopCount = 0;
+
+            // Tüm input olmayanların state'ini sıfırlama (opsiyonel, bazen lazım olabilir)
+            // Ama latch/memory devreleri için sıfırlamamak daha iyidir.
+
+            while(changed && loopCount < 100) { // Sonsuz döngü koruması
+                changed = false;
+                loopCount++;
+
+                nodes.forEach(node => {
+                    if(node.type === 'INPUT') return; // Inputlar elle değişir
+
+                    // Giriş değerlerini bul
+                    const inputs = [0, 0]; // Varsayılan 0
+                    
+                    // Pin 0'a gelen kablo
+                    const conn0 = connections.find(c => c.toNode === node.id && c.toPinIndex === 0);
+                    if(conn0) {
+                        const source = nodes.find(n => n.id === conn0.fromNode);
+                        if(source) inputs[0] = source.state;
+                    }
+
+                    // Pin 1'e gelen kablo (varsa)
+                    const conn1 = connections.find(c => c.toNode === node.id && c.toPinIndex === 1);
+                    if(conn1) {
+                        const source = nodes.find(n => n.id === conn1.fromNode);
+                        if(source) inputs[1] = source.state;
+                    }
+
+                    // Mantık Hesabı
+                    let newState = 0;
+                    switch(node.type) {
+                        case 'AND': newState = (inputs[0] && inputs[1]) ? 1 : 0; break;
+                        case 'OR':  newState = (inputs[0] || inputs[1]) ? 1 : 0; break;
+                        case 'XOR': newState = (inputs[0] !== inputs[1]) ? 1 : 0; break;
+                        case 'NOT': newState = (inputs[0] ? 0 : 1); break;
+                        case 'OUTPUT': newState = inputs[0]; break;
+                    }
+
+                    if(node.state !== newState) {
+                        node.state = newState;
+                        changed = true;
+                    }
+                });
+            }
+
+            if(loopCount > 0) render(); // Durum değiştiyse tekrar çiz (renkler için)
+        }
+
+        // --- YARDIMCI FONKSİYONLAR ---
+
+        function deleteNode(id) {
+            saveState();
+            nodes = nodes.filter(n => n.id !== id);
+            connections = connections.filter(c => c.fromNode !== id && c.toNode !== id);
+            render();
+            simulate();
+        }
+
+        function clearBoard() {
+            if(confirm("Tüm devreyi temizlemek istediğine emin misin?")) {
+                saveState();
+                nodes = [];
+                connections = [];
+                render();
+            }
+        }
+
+        // --- UNDO / REDO SİSTEMİ ---
+
+        function saveState() {
+            // Derin kopya oluştur (JSON methodu en kolayıdır)
+            const currentState = JSON.stringify({ nodes, connections });
+            
+            // Eğer stack doluysa en eskisini at
+            if (historyStack.length >= MAX_HISTORY) historyStack.shift();
+            
+            historyStack.push(currentState);
+            redoStack = []; // Yeni işlem yapıldığında redo geçmişi silinir
+            updateUndoButtons();
+        }
+
+        function undo() {
+            if (historyStack.length === 0) return;
+            
+            // Mevcut hali redo'ya at
+            const currentState = JSON.stringify({ nodes, connections });
+            redoStack.push(currentState);
+            
+            // History'den al
+            const previousStateJSON = historyStack.pop();
+            const state = JSON.parse(previousStateJSON);
+            
+            nodes = state.nodes;
+            connections = state.connections;
+            
+            render();
+            simulate();
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+
+            // Mevcut hali undo'ya at
+            const currentState = JSON.stringify({ nodes, connections });
+            historyStack.push(currentState);
+
+            // Redo'dan al
+            const nextStateJSON = redoStack.pop();
+            const state = JSON.parse(nextStateJSON);
+
+            nodes = state.nodes;
+            connections = state.connections;
+
+            render();
+            simulate();
+        }
+
+        function updateUndoButtons() {
+            document.getElementById('btn-undo').disabled = historyStack.length === 0;
+            document.getElementById('btn-redo').disabled = redoStack.length === 0;
+        }
+
+        // Klavye Kısayolları (Ctrl+Z, Ctrl+Y)
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                undo();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+                e.preventDefault();
+                redo();
+            }
+        });
+
+    </script>
+</body>
+</html>
+
+-->
