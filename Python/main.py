@@ -1,3 +1,5 @@
+# ana kod dosyası - main
+
 from kod_satir import *
 from mantik_kapilari import *
 
@@ -61,3 +63,4 @@ while True:
     if tekrar == 0:
         print("Program sonlandırılıyor...")
         break
+
