@@ -22,3 +22,7 @@ DEMO: https://nkugoogle.info/mantik
 
 <img width="465" height="581" alt="image" src="https://github.com/user-attachments/assets/5fbc2230-d2ab-4943-a0b5-bb3943e73482" />
 
+Orn WEB:
+<img width="1919" height="886" alt="image" src="https://github.com/user-attachments/assets/fcdee820-393f-41c6-8f17-c7cd144b1e1d" />
+<img width="1915" height="870" alt="image" src="https://github.com/user-attachments/assets/2e49e761-2a4e-481a-8afc-54e4ec4b885a" />
+
