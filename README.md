@@ -1,7 +1,7 @@
 # Logic-Circuit-Algorithm
 An advanced logic circuit algorithm for gate optimization and digital logic simulation. Faster than standard methods
 
-DEMO: https://nkugoogle.info/mantik
+DEMO: https://sotstech.com/project/logic_circuit_algorithm/
 
 
 <img width="662" height="788" alt="image" src="https://github.com/user-attachments/assets/0fa78f5f-69ed-40e0-80e8-2c8b4e4e2637" />
