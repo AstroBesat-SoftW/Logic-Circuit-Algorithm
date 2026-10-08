@@ -3,6 +3,8 @@ An advanced logic circuit algorithm for gate optimization and digital logic simu
 
 DEMO: https://sotstech.com/project/logic_circuit_algorithm/
 
+<img width="1917" height="868" alt="image" src="https://github.com/user-attachments/assets/f07908bc-4dca-4afe-a47f-d436a982cb11" />
+
 
 <img width="662" height="788" alt="image" src="https://github.com/user-attachments/assets/0fa78f5f-69ed-40e0-80e8-2c8b4e4e2637" />
 
