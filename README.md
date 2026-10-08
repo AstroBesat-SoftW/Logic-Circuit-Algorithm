@@ -2,6 +2,7 @@
 An advanced logic circuit algorithm for gate optimization and digital logic simulation. Faster than standard methods
 
 DEMO: https://sotstech.com/project/logic_circuit_algorithm/
+
 <img width="1917" height="867" alt="image" src="https://github.com/user-attachments/assets/8af741ba-d629-42c8-8a0f-f468fba90565" />
 
 
