@@ -3,7 +3,7 @@ An advanced logic circuit algorithm for gate optimization and digital logic simu
 
 DEMO: https://sotstech.com/project/logic_circuit_algorithm/
 v2.9.8
-English: <a href="https://github.com/AstroBesat-SoftW/Logic-Circuit-Algorithm/Proje_detay_EN_article.pfg" > This</a>
+English: <a href="[https://github.com/AstroBesat-SoftW/Logic-Circuit-Algorithm/Proje_detay_EN_article.pfg](https://github.com/AstroBesat-SoftW/Logic-Circuit-Algorithm/blob/main/Proje_detay_EN_article.pdf)" > This</a>
 <img width="1917" height="867" alt="image" src="https://github.com/user-attachments/assets/8af741ba-d629-42c8-8a0f-f468fba90565" />
 
 
